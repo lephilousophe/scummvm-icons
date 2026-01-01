@@ -40,7 +40,7 @@ import xml.etree.ElementTree as ElemTree
 from dataclasses import dataclass
 from datetime import date, datetime
 from pathlib import Path
-from typing import Tuple, final, Set, AnyStr, List
+from typing import Final, List, Optional, Set, Tuple
 from zipfile import ZipFile
 
 
@@ -52,38 +52,38 @@ class GUID:
     element_name: str
 
 
-GUIDS: final(Set[GUID]) = {GUID(filename_root='games', gid='1775285192', element_name='game'),
+GUIDS: Final[Set[GUID]] = {GUID(filename_root='games', gid='1775285192', element_name='game'),
                            GUID(filename_root='engines', gid='0', element_name='engine'),
                            GUID(filename_root='companies', gid='226191984', element_name='company'),
                            GUID(filename_root='series', gid='1095671818', element_name='serie')
                            }
 
-MIN_PYTHON: final(Tuple[int]) = (3, 8)  # min python version is 3.8
+MIN_PYTHON: Final[Tuple[int, int]] = (3, 8)  # min python version is 3.8
 
 # Keep the URL as an only line
 # pylint: disable-next=line-too-long
-URL_HEAD: final = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQamumX0p-DYQa5Umi3RxX-pHM6RZhAj1qvUP0jTmaqutN9FwzyriRSXlO9rq6kR60pGIuPvCDzZL3s/pub?output=tsv"
+URL_HEAD: Final = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQamumX0p-DYQa5Umi3RxX-pHM6RZhAj1qvUP0jTmaqutN9FwzyriRSXlO9rq6kR60pGIuPvCDzZL3s/pub?output=tsv"
 
-URL_ICONS_LIST: final = 'https://downloads.scummvm.org/frs/icons/LIST'
+URL_ICONS_LIST: Final = 'https://downloads.scummvm.org/frs/icons/LIST'
 
-ICON_DIR: final = 'icons'
-ENCODING: final = 'utf-8'
+ICON_DIR: Final = 'icons'
+ENCODING: Final = 'utf-8'
 
-ZIP_NAME_PREFIX: final = 'gui-icons-'
-ZIP_NAME_EXTENSION: final = '.dat'
-ZIP_DATE_FORMAT: final = '%Y%m%d'
+ZIP_NAME_PREFIX: Final = 'gui-icons-'
+ZIP_NAME_EXTENSION: Final = '.dat'
+ZIP_DATE_FORMAT: Final = '%Y%m%d'
 
-LIST_NAME: final = 'LIST'
-LIST_DELIM: final = ','
+LIST_NAME: Final = 'LIST'
+LIST_DELIM: Final = ','
 
-DATE_FORMAT: final = '%Y-%m-%d'
+DATE_FORMAT: Final = '%Y-%m-%d'
 
-FIRST_HASH: final = 'b2a20aad85714e0fea510483007e5e96d84225ca'
+FIRST_HASH: Final = 'b2a20aad85714e0fea510483007e5e96d84225ca'
 
 ChangedFileSet = Set[str]
 
 
-def work(last_update: datetime or None, last_hash: str, listfile_entries: List[str]) -> None:
+def work(last_update: Optional[datetime], last_hash: str, listfile_entries: List[str]) -> None:
     """Our main worker function.
 
     :param last_update: datetime
@@ -155,7 +155,7 @@ def generate_xmls() -> List[str]:
     return xml_files
 
 
-def get_changed_icon_file_names(last_update: datetime, last_hash: str) -> ChangedFileSet:
+def get_changed_icon_file_names(last_update: Optional[datetime], last_hash: str) -> ChangedFileSet:
     """Returns all changed ICON file names.
 
     :param last_update: last update as datetime (hash is preferred)
@@ -163,20 +163,20 @@ def get_changed_icon_file_names(last_update: datetime, last_hash: str) -> Change
     :return: a ChangedFileSet with all changed icons.
     """
 
-    if last_hash:
-        print('\nStep 2: fetching changed icons using hash ' + last_hash)
-        last_iconsdat_date = None
-    else:
-        last_iconsdat_date = last_update.strftime(DATE_FORMAT)
-        print('\nStep 2: fetching changed icons since ' + last_iconsdat_date)
-
     check_isscummvmicons_repo()
 
     is_repo_uptodate()
 
     if last_hash:
+        print('\nStep 2: fetching changed icons using hash ' + last_hash)
+        last_iconsdat_date = None
+
         commit_hash = last_hash
     else:
+        assert last_update is not None
+        last_iconsdat_date = last_update.strftime(DATE_FORMAT)
+        print('\nStep 2: fetching changed icons since ' + last_iconsdat_date)
+
         commit_hashes = get_commit_hashes(last_iconsdat_date)
 
         # no changes nothing to do
@@ -278,7 +278,7 @@ def check_isscummvmicons_repo() -> None:
     print('done')
 
 
-def is_scummvmicons_repo(remotes: List[AnyStr]) -> bool:
+def is_scummvmicons_repo(remotes: List[bytes]) -> bool:
     """ Checks if the local repo is a scummvm-icons repo"""
 
     # should be the correct repo
@@ -395,17 +395,18 @@ def write_iconsdat(changed_files: List[str]) -> str:
     return zip_name
 
 
-def run_git(*git_args) -> List[AnyStr]:
-    """Executes a git command and returns the stdout (as Line[AnyStr])
+def run_git(*git_args) -> List[bytes]:
+    """Executes a git command and returns the stdout (as Line[bytes])
 
     :param *git_args:  A string, or a sequence of program arguments.
-    :return: The StdOut as List[AnyStr]
+    :return: The StdOut as List[bytes]
     """
 
     my_env = os.environ.copy()  # copy current environ
     my_env["LANG"] = "C"  # add lang C
     with subprocess.Popen(args=['git'] + list(git_args),
                           stdout=subprocess.PIPE, env=my_env) as child_proc:
+        assert child_proc.stdout is not None
         lines = child_proc.stdout.readlines()
         child_proc.wait()
         if child_proc.returncode != 0:
