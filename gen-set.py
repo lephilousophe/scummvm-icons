@@ -266,15 +266,10 @@ def check_isscummvmicons_repo() -> None:
     """Different checks for the local repo - will quit() the script if there is any error."""
     print('checking local directory is scummvm-icons repo ... ', end='', flush=True)
 
-    output_show_origin = run_git('remote', 'show', 'origin')
-
-    if not is_any_git_repo(output_show_origin):
-        print('error')
-        print('not a git repository (or any of the parent directories)')
-        sys.exit(1)
+    remotes = run_git('remote', '-v')
 
     # wrong repo
-    if not is_scummvmicons_repo(output_show_origin):
+    if not is_scummvmicons_repo(remotes):
         print('error')
         print('local folder is not a scummvm-icons git repo')
         sys.exit(1)
@@ -282,29 +277,21 @@ def check_isscummvmicons_repo() -> None:
     print('done')
 
 
-def is_scummvmicons_repo(output_showorigin: List[AnyStr]) -> bool:
+def is_scummvmicons_repo(remotes: List[AnyStr]) -> bool:
     """ Checks if the local repo is a scummvm-icons repo"""
 
     # should be the correct repo
-    if any('Fetch URL: https://github.com/scummvm/scummvm-icons' in line.decode(ENCODING)
-           for line in output_showorigin):
-        return True
+    for spec in remotes:
+        _remote, url_type = spec.split(b'\t', maxsplit=1)
+        url, _type = url_type.rsplit(b' ', maxsplit=1)
+        url_ = url.decode(ENCODING)
+        if url_.startswith('https://github.com/scummvm/scummvm-icons'):
+            return True
+        # Also accept ssh:// form
+        if 'git@github.com:scummvm/scummvm-icons' in url_:
+            return True
 
     return False
-
-
-def is_any_git_repo(output_showorigin: List[AnyStr]) -> bool:
-    """Checks if the local folder belongs to a git repo.
-
-    :param output_showorigin: The output of 'show origin'.
-    :return: True if it is a git repo
-    """
-
-    # outside of any local git repo
-    if any('fatal: not a git repository' in line.decode(ENCODING) for line in output_showorigin):
-        return False
-
-    return True
 
 
 def is_repo_uptodate() -> bool:
@@ -322,10 +309,9 @@ def is_repo_uptodate() -> bool:
         return False
 
     # second variant of check
-    run_git('update-index', '--refresh', '--unmerged')
-    if len(run_git('diff-index', '--quiet', 'HEAD')) > 0:
+    if len(run_git('diff-index', 'HEAD')) > 0:
         print('warning')
-        print('fetch with changes - make sure that your local branch is up to date')
+        print('local pending changes - make sure that your local branch is up to date')
         return False
 
     print('done')
@@ -415,8 +401,14 @@ def run_git(*git_args) -> List[AnyStr]:
 
     my_env = os.environ.copy()  # copy current environ
     my_env["LANG"] = "C"  # add lang C
-    with subprocess.Popen(args=['git'] + list(git_args), stdout=subprocess.PIPE, env=my_env) as child_proc:
-        return child_proc.stdout.readlines()
+    with subprocess.Popen(args=['git'] + list(git_args),
+                          stdout=subprocess.PIPE, env=my_env) as child_proc:
+        lines = child_proc.stdout.readlines()
+        child_proc.wait()
+        if child_proc.returncode != 0:
+            print(f"ERROR: git command {git_args!r} failed")
+            sys.exit(1)
+        return lines
 
 
 ###########
