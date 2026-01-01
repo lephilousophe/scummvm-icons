@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-# pylint: disable=docstring-first-line-empty
+# pylint: disable=docstring-first-line-empty,invalid-name
 # we shouldn't change this default header
 
 """
@@ -26,7 +26,7 @@
  "
 """
 
-# pylint: enable=docstring-first-line-empty
+# pylint: enable=docstring-first-line-empty,invalid-name
 
 import argparse
 import csv
@@ -60,9 +60,9 @@ GUIDS: final(Set[GUID]) = {GUID(filename_root='games', gid='1775285192', element
 
 MIN_PYTHON: final(Tuple[int]) = (3, 8)  # min python version is 3.8
 
-URL_HEAD: final = ("https://docs.google.com/spreadsheets/d/e/"
-                   + "2PACX-1vQamumX0p-DYQa5Umi3RxX-pHM6RZhAj1qvUP0jTmaqutN9FwzyriRSXlO9rq6kR60pGIuPvCDzZL3s"
-                   + "/pub?output=tsv")
+# Keep the URL as an only line
+# pylint: disable-next=line-too-long
+URL_HEAD: final = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQamumX0p-DYQa5Umi3RxX-pHM6RZhAj1qvUP0jTmaqutN9FwzyriRSXlO9rq6kR60pGIuPvCDzZL3s/pub?output=tsv"
 
 URL_ICONS_LIST: final = 'https://downloads.scummvm.org/frs/icons/LIST'
 
@@ -83,8 +83,8 @@ FIRST_HASH: final = 'b2a20aad85714e0fea510483007e5e96d84225ca'
 ChangedFileSet = Set[str]
 
 
-def main(last_update: datetime or None, last_hash: str, listfile_entries: List[str]) -> None:
-    """Our main function.
+def work(last_update: datetime or None, last_hash: str, listfile_entries: List[str]) -> None:
+    """Our main worker function.
 
     :param last_update: datetime
             An optional last_update datetime. Day + 1 after the last creation of icons.zip
@@ -239,7 +239,8 @@ def get_last_hash_from_master() -> str:
 def get_listfile_lasthash() -> Tuple[str, List[str]]:
     """Reads the LIST file and returns the last hash and the list of lines.
 
-    :return: A String with the last hash (from the LIST file) and a List containing all the lines of the LIST file.
+    :return: A String with the last hash (from the LIST file) and
+             a List containing all the lines of the LIST file.
     """
     print('no inputDate argument - fetching last hash from ' + LIST_NAME + '... ', flush=True)
 
@@ -327,7 +328,8 @@ def get_commit_hashes(last_icondat_date: str) -> List[str]:
 
     commit_hashes: List[str] = []
     # using log with reverse to fetch the commit_hashes
-    for commit_lines in run_git('log', '--reverse', '--oneline', "--since='" + last_icondat_date + "'"):
+    for commit_lines in run_git('log', '--reverse', '--oneline',
+                                f"--since='{last_icondat_date}'"):
         # split without sep - runs of consecutive whitespace are regarded as a single separator
         commit_hashes.append(commit_lines.decode(ENCODING).split(maxsplit=1)[0])
 
@@ -349,7 +351,8 @@ def collect_commit_file_names(commit_hash: str) -> ChangedFileSet:
         # stdout will contain bytes - convert to utf-8 and strip cr/lf if present
         git_file_name = file.decode(ENCODING).rstrip()
 
-        if git_file_name.startswith(ICON_DIR + '/') or git_file_name.startswith(ICON_DIR + 'icons\\'):
+        if (git_file_name.startswith(ICON_DIR + '/') or
+            git_file_name.startswith(ICON_DIR + '\\')):
 
             # build local path with a defined local folder / sanitize filenames
             local_path = '.' + os.path.sep + ICON_DIR + os.path.sep + Path(git_file_name).name
@@ -413,25 +416,34 @@ def run_git(*git_args) -> List[AnyStr]:
 
 ###########
 
-if sys.version_info < MIN_PYTHON:
-    sys.exit(f"Python {MIN_PYTHON[0]}.{MIN_PYTHON[1]} or later is required.\n")
+def main():
+    """Our main function.
 
-# check args / get date
-argParser = argparse.ArgumentParser(usage='%(prog)s [lastUpdate]')
-argParser.add_argument('lastUpdate', help='last update - date format: yyyymmdd', default=argparse.SUPPRESS, nargs='?')
-args = argParser.parse_args()
+    Called when calling the script directly.
+    """
+    if sys.version_info < MIN_PYTHON:
+        sys.exit(f"Python {MIN_PYTHON[0]}.{MIN_PYTHON[1]} or later is required.\n")
 
-# optional param, if not present fetch last_update from the LIST file
-if 'lastUpdate' in args:
-    arg_last_update = datetime.strptime(args.lastUpdate, '%Y%m%d')
-    print('using provided inputDate: ' + arg_last_update.strftime(DATE_FORMAT) + '\n')
+    # check args / get date
+    arg_parser = argparse.ArgumentParser(usage='%(prog)s [lastUpdate]')
+    arg_parser.add_argument('lastUpdate', help='last update - date format: yyyymmdd',
+                           default=argparse.SUPPRESS, nargs='?')
+    args = arg_parser.parse_args()
 
-    # we have to read the LIST later (if needed)
-    main(arg_last_update, "", [])
+    # optional param, if not present fetch last_update from the LIST file
+    if 'lastUpdate' in args:
+        arg_last_update = datetime.strptime(args.lastUpdate, '%Y%m%d')
+        print('using provided inputDate: ' + arg_last_update.strftime(DATE_FORMAT) + '\n')
 
-else:
-    arg_last_hash, arg_listfile_entries = get_listfile_lasthash()
-    print('using last hash from ' + LIST_NAME + ': ' + arg_last_hash + '\n')
+        # we have to read the LIST later (if needed)
+        work(arg_last_update, "", [])
 
-    # listfile_entries as param, no need the read the LIST file twice
-    main(None, arg_last_hash, arg_listfile_entries)
+    else:
+        arg_last_hash, arg_listfile_entries = get_listfile_lasthash()
+        print('using last hash from ' + LIST_NAME + ': ' + arg_last_hash + '\n')
+
+        # listfile_entries as param, no need the read the LIST file twice
+        work(None, arg_last_hash, arg_listfile_entries)
+
+if __name__ == '__main__':
+    main()
